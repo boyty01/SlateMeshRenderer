@@ -4,7 +4,7 @@
 
 A common issue among the Unreal community is how to render 3D Meshes into the UI without awkward, unscalable solutions.  
 
-UI Mesh Renderer spins up a custom private UWorld for each instance of the widget and renders out a scene with a single AActor & Directional light directly to the widget.
+UI Mesh Renderer spins up a minimal private UWorld for each instance of the widget and renders out a scene with a single AActor & Directional light directly to the widget.
 
 
 ## Blueprint Class Support
