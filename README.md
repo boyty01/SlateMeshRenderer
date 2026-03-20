@@ -1,0 +1,25 @@
+# UI Mesh Renderer
+
+## Drag and drop widget that renders 3D meshes or Blueprints directly into the widget without having to set up scene capture cameras or render targets.
+
+A common issue among the Unreal community is how to render 3D Meshes into the UI without awkward, unscalable solutions.  
+
+UI Mesh Renderer spins up a minimal private UWorld for each instance of the widget and renders out a scene with a single AActor & Directional light directly to the widget.
+
+
+## Blueprint Class Support
+Spawn multiple mesh components via blueprints using SetSceneActor() on the ItemInspectorWidget
+
+## Direct Static Mesh Support
+Set a static mesh actor directly with a UStaticMesh* by calling SetSceneActorAsStaticMesh on the ItemInspectorWidget
+
+
+## V1 Limitations 
+
+### Capped Resolution
+SViewports get drawn to the resolution requested by the widget's screen space.  As UMG's designer graph allows designers to zoom in very close to a widget, this can explode the viewport resolution to levels that flood the GPU's VRAM instantly. 
+To resolve this, the viewport is currently limited to 2048x2048 resolution, regardless of the space requested - which may result in the viewport not stretching to fit it's parent container where Widgets scale beyond 1080 desktop resolutions.  This is slated to be fixed in the next update. 
+
+### No Physics Support
+For performance management, all unnecessary systems are disabled on the private world, including Physics Simulation. This may be exposed as an optional designer setting in the future.
+
