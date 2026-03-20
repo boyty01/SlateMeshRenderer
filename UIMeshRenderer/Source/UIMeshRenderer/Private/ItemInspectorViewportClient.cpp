@@ -60,18 +60,15 @@ void FItemInspectorViewportClient::Draw(FViewport* Viewport, FCanvas* Canvas)
     const FIntPoint RawSize = Viewport->GetSizeXY();
     const uint64 CurrentFrame = GFrameCounter;
     const float DPIScale = FSlateApplication::Get().GetApplicationScale();
-    FIntPoint FinalSize(
-        FMath::RoundToInt(RawSize.X * DPIScale),
-        FMath::RoundToInt(RawSize.Y * DPIScale)
-    );
+    FIntPoint FinalSize( RawSize.X, RawSize.Y );
 
     // clamp designer view to low res for performance reasons. If designers zoom in too far, the resolution can balloon to massive sizes, completely eating the GPU's VRAM.
-#if WITH_EDITOR
-    if (GIsEditor && !GWorld->HasBegunPlay())
+ #if WITH_EDITOR
+    if (GWorld->IsEditorWorld() && !GWorld->GetBegunPlay())
     {
-        FinalSize.X = FMath::Clamp(FinalSize.X, 1, 1024);
-        FinalSize.Y = FMath::Clamp(FinalSize.Y, 1, 1024);
-    }
+        FinalSize.X = FMath::Clamp(FinalSize.X, 1, 7680);
+        FinalSize.Y = FMath::Clamp(FinalSize.Y, 1, 7680);
+    } 
 #endif
   
     FSceneViewInitOptions ViewInitOptions;

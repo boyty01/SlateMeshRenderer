@@ -61,7 +61,13 @@ protected:
     // Holds the actual Slate pointer
     TSharedPtr<SItemInspector> MyInspector;
 
+    // Enable Physics simulation in the scene. Default off for performance.
+    UPROPERTY(EditAnywhere, Category = "Performance")
+    bool bEnablePhysics{ false };
 
+    // Enable FX systems in the scene. Some particle systems will not function correctly if bEnablePhysics is disabled. 
+    UPROPERTY(EditAnywhere, Category = "Performance")
+    bool bEnableFXSystems{ false };
 
     // Perspective field of view for the scene.
     UPROPERTY(EditAnywhere, Category = "Appearance")

@@ -41,7 +41,8 @@ public class UIMeshRenderer : ModuleRules
 				"SlateCore",
 				"Renderer",
 				"RenderCore",
-				"RHI"
+				"RHI",
+				"HairStrandsCore"
 				// ... add private dependencies that you statically link with here ...	
 			}
 			);

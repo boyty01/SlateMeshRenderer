@@ -71,6 +71,7 @@ void UItemInspectorWidget::AddSceneActorRotation(FRotator AdditiveRot)
     {
        TSharedRef<FItemInspectorWorldHandler> Handler = MyInspector->GetWorldHandler();
        Handler->AddSceneActorRotation(AdditiveRot.Pitch, AdditiveRot.Yaw, AdditiveRot.Roll);
+       MyInspector->MarkSceneDirty();
     }
 }
 
@@ -87,11 +88,13 @@ AActor* UItemInspectorWidget::SetSceneActor(TSubclassOf<AActor> ActorToSpawn)
     if (MyInspector->IsParentValid())
     {
         TSharedRef<FItemInspectorWorldHandler> Handler = MyInspector->GetWorldHandler();
+        AActor* SpawnedActor = Handler->SpawnSceneActor(ActorToSpawn);
         if (bAutoFitCameraDistance)
         {
             MyInspector->AutoFitCamera();
         }
-        return Handler->SpawnSceneActor(ActorToSpawn);
+        MyInspector->MarkSceneDirty();
+        return SpawnedActor;
     }
     return nullptr;
 }

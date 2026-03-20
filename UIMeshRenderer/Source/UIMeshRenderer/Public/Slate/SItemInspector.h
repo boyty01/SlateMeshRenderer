@@ -30,7 +30,7 @@ public:
 
     FString GetReferencerName() const override;
 
-    void Initialize(TSubclassOf<AActor> ActorToSpawn = nullptr);   
+    void Initialize(TSubclassOf<AActor> ActorToSpawn = nullptr, const bool bEnablePhysics = false, const bool bEnableFX = false);   
 
     // spawn and replace the scene actor with the class provided.
     AActor* SpawnSceneActor(TSubclassOf<AActor> ClassToSpawn);
@@ -78,6 +78,8 @@ public:
        SLATE_ARGUMENT(float, FieldOfView)
        SLATE_ARGUMENT(bool, AutoFitCamera)
        SLATE_ARGUMENT(TSubclassOf<AActor>, DefaultSceneActor)
+       SLATE_ARGUMENT(bool, EnablePhysics)
+       SLATE_ARGUMENT(bool, EnableFX)
     SLATE_END_ARGS()
 
     SItemInspector();
@@ -98,6 +100,9 @@ public:
     // automatically calculate the camera position so the mesh fits in frame
     void AutoFitCamera();
 
+    // Mark the scene as needing a redraw (e.g. after rotation or zoom input)
+    void MarkSceneDirty() { bSceneDirty = true; }
+
 private:
 
     EActiveTimerReturnType  ActiveTimerCallback(double InCurrentTime, float InDeltaTime);
@@ -107,6 +112,12 @@ private:
     TSharedRef<FItemInspectorWorldHandler> WorldHandler;
 
     bool bAutoFitCamera;
+
+    // True when rotation, zoom, or a spawn has occurred and a redraw is needed
+    bool bSceneDirty{ true };
+
+    // True when physics or FX are active — world must tick every frame regardless of input
+    bool bHasLiveSimulation{ false };
 
     TSharedPtr<FItemInspectorViewportClient> ViewportClient;
     TSharedPtr<FSceneViewport> SceneViewport;

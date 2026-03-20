@@ -9,6 +9,7 @@
 #include "Engine/StaticMeshActor.h"
 #include "Slate/SItemInspectorViewport.h"
 #include "Engine/DirectionalLight.h"
+#include "GameFramework/GameModeBase.h"
 #include "Components/DirectionalLightComponent.h"
 
 /* --------------------*/
@@ -32,26 +33,30 @@ void FItemInspectorWorldHandler::SetLightRotation(FRotator NewRot)
     }
 }
 
-void FItemInspectorWorldHandler::Initialize(TSubclassOf<AActor> ActorToSpawn)
+void FItemInspectorWorldHandler::Initialize(TSubclassOf<AActor> ActorToSpawn, const bool bEnablePhysics, const bool bEnableFX)
 {
 
     UWorld* PreviousWorld = GWorld;
 
     PrivateWorld = NewObject<UWorld>(GetTransientPackage(), NAME_None, RF_Transient);
-    PrivateWorld->WorldType = EWorldType::GamePreview;
+    PrivateWorld->WorldType = EWorldType::Game;
     PrivateWorld->InitializeNewWorld(UWorld::InitializationValues()
         .AllowAudioPlayback(false)
-        .CreatePhysicsScene(false)
+        .CreatePhysicsScene(bEnablePhysics)
         .CreateNavigation(false)
         .CreateAISystem(false)
-        .ShouldSimulatePhysics(false)
+        .ShouldSimulatePhysics(bEnablePhysics)
+        .CreateFXSystem(bEnableFX)
+        .InitializeScenes(true)
+        .SetDefaultGameMode(AGameModeBase::StaticClass())
     );
 
-    FWorldContext& WorldContext = GEngine->CreateNewWorldContext(EWorldType::GamePreview);
+    FWorldContext& WorldContext = GEngine->CreateNewWorldContext(EWorldType::Game);
     WorldContext.SetCurrentWorld(PrivateWorld);
-//  PrivateWorld->BeginPlay();
-    
+
     GWorld = PreviousWorld;
+
+    PrivateWorld->SetBegunPlay(true);
 
     if(ActorToSpawn)
         SpawnSceneActor(ActorToSpawn);
@@ -66,6 +71,7 @@ void FItemInspectorWorldHandler::ReleaseResources()
     if (!PrivateWorld) return;
 
     PrivateWorld->BeginTearingDown();
+    PrivateWorld->EndPlay(EEndPlayReason::Destroyed);
     PrivateWorld->ClearWorldComponents();
     PrivateWorld->FlushLevelStreaming();
 
@@ -99,7 +105,7 @@ void FItemInspectorWorldHandler::CenterSceneActor()
     FVector BoxExtent;
     SceneActor->GetActorBounds(false, Origin, BoxExtent);
 
-    SceneActor->SetActorLocation(-Origin);
+    SceneActor->SetActorLocation(-Origin, false, nullptr, ETeleportType::ResetPhysics);
     CachedBoundsExtent = BoxExtent;
 }
 
@@ -139,7 +145,6 @@ void FItemInspectorWorldHandler::ForceMeshFullResolution()
                 if (UTexture2D* Tex2D = Cast<UTexture2D>(Texture))
                 {
                     Tex2D->SetForceMipLevelsToBeResident(30.f);
-                    Tex2D->WaitForStreaming();
                 }
             }
         }
@@ -153,6 +158,7 @@ void FItemInspectorWorldHandler::ForceMeshFullResolution()
         Mesh->SetForcedLOD(1); // ForcedLodModel = 1;
         Mesh->bForceMipStreaming = true;
         Mesh->MarkRenderStateDirty();
+        Mesh->InitAnim(true);
 
         for (int32 i = 0; i < Mesh->GetNumMaterials(); i++)
         {
@@ -166,11 +172,12 @@ void FItemInspectorWorldHandler::ForceMeshFullResolution()
                 if (UTexture2D* Tex2D = Cast<UTexture2D>(Texture))
                 {
                     Tex2D->SetForceMipLevelsToBeResident(30.f);
-                    Tex2D->WaitForStreaming();
                 }
             }
         }
     }
+
+
 }
 
 FString FItemInspectorWorldHandler::GetReferencerName() const
@@ -190,6 +197,7 @@ AActor* FItemInspectorWorldHandler::SpawnSceneActor(TSubclassOf<AActor> ClassToS
     {
         SceneActor = PrivateWorld->SpawnActor<AActor>(ClassToSpawn, FTransform::Identity);
         SceneActor->GetRootComponent()->SetMobility(EComponentMobility::Movable);
+        SceneActor->DispatchBeginPlay();
         CenterSceneActor();
         ForceMeshFullResolution();
     }
@@ -228,15 +236,26 @@ SItemInspector::~SItemInspector()
 void SItemInspector::Construct(const FArguments& InArgs)
 {
 
-    if (InArgs._ShouldSpawnAsStaticMesh)
+
+    if (InArgs._ShouldSpawnAsStaticMesh)     // Init as static mesh actor using the default static mesh specified 
     {
-        WorldHandler->Initialize(AStaticMeshActor::StaticClass());
+        WorldHandler->Initialize(
+            AStaticMeshActor::StaticClass(),
+            InArgs._EnablePhysics,
+            InArgs._EnableFX
+);
         WorldHandler->SetStaticMeshActorVisualMesh(InArgs._DefaultStaticMesh);
     }
-    else 
+    else      // Init as blueprint class using the default class specified
     {
-        WorldHandler->Initialize(InArgs._DefaultSceneActor);
+        WorldHandler->Initialize(
+            InArgs._DefaultSceneActor, 
+            InArgs._EnablePhysics,
+            InArgs._EnableFX
+        );
     }
+
+    bHasLiveSimulation = InArgs._EnablePhysics || InArgs._EnableFX;
 
     WorldHandler->CenterSceneActor();
     WorldHandler->SetLightRotation(InArgs._LightDirection);
@@ -267,7 +286,7 @@ void SItemInspector::Construct(const FArguments& InArgs)
     SceneViewport = MakeShareable(new FSceneViewport(ViewportClient.Get(), ViewportWidget));
     ViewportWidget->SetViewportInterface(SceneViewport.ToSharedRef());
 
-    RegisterActiveTimer(0.0f, FWidgetActiveTimerDelegate::CreateSP(this, &SItemInspector::ActiveTimerCallback));
+    RegisterActiveTimer(1.f / 30.f, FWidgetActiveTimerDelegate::CreateSP(this, &SItemInspector::ActiveTimerCallback));
 
 }
 
@@ -311,14 +330,21 @@ EActiveTimerReturnType SItemInspector::ActiveTimerCallback(double InCurrentTime,
         return EActiveTimerReturnType::Continue;
     }
 
-    if (WorldHandler->GetWorld())
-    {
-        WorldHandler->GetWorld()->Tick(LEVELTICK_All, InDeltaTime);
-    }
+    const bool bShouldUpdate = bHasLiveSimulation || bSceneDirty;
 
-    if (SceneViewport.IsValid())
+    if (bShouldUpdate)
     {
-        SceneViewport->Invalidate();
+        if (WorldHandler->GetWorld())
+        {
+            WorldHandler->GetWorld()->Tick(LEVELTICK_All, InDeltaTime);
+        }
+
+        if (SceneViewport.IsValid())
+        {
+            SceneViewport->Invalidate();
+        }
+
+        bSceneDirty = false;
     }
 
     return EActiveTimerReturnType::Continue;
@@ -333,7 +359,8 @@ void SItemInspector::UpdateCamera(const float DeltaZoom)
 {
     if (ViewportClient.IsValid())
     {
-        ViewportClient->UpdateCamera(0,0, DeltaZoom);
+        ViewportClient->UpdateCamera(0, 0, DeltaZoom);
+        bSceneDirty = true;
     }
 }
 
